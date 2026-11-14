@@ -1,0 +1,14 @@
+FROM registry.astralinux.ru/library/astra/ubi18-golang121:1.8.5-mg16.2.0
+
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libc6-dev pkg-config libgl1-mesa-dev libx11-dev libxcursor-dev \
+    libxrandr-dev libxi-dev libxinerama-dev libxxf86vm-dev \
+    libwayland-dev libxkbcommon-dev wayland-protocols \
+    && rm -rf /var/lib/apt/lists/*
+
+# The base image has Go 1.21; go.mod requires a newer toolchain.
+ENV GOTOOLCHAIN=auto CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+    GOPATH=/tmp/go GOCACHE=/tmp/go-build
+WORKDIR /src
+ENTRYPOINT []
