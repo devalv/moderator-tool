@@ -3,10 +3,11 @@ package launcher
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
-	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -30,7 +31,11 @@ func checkProcesses(exe string) (err error) {
 		return fmt.Errorf("не удалось получить список процессов: %w", err)
 	}
 	defer func() { err = errors.Join(err, windows.CloseHandle(h)) }()
-	entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
+	entrySize := reflect.TypeFor[windows.ProcessEntry32]().Size()
+	if entrySize > math.MaxUint32 {
+		return errors.New("размер структуры процесса превышает предел Windows API")
+	}
+	entry := windows.ProcessEntry32{Size: uint32(entrySize)}
 	for e := windows.Process32First(h, &entry); ; e = windows.Process32Next(h, &entry) {
 		if errors.Is(e, windows.ERROR_NO_MORE_FILES) {
 			return nil
