@@ -9,10 +9,15 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+
 	launcher "github.com/devalv/moderator-tool/internal"
 )
 
-const defaultPort = "39897"
+const (
+	defaultPort  = "39897"
+	windowWidth  = 620
+	windowHeight = 310
+)
 
 func Run() {
 	a := app.New()
@@ -20,6 +25,7 @@ func Run() {
 	newWindow(a, l, err).ShowAndRun()
 }
 
+//nolint:ireturn // Fyne exposes windows through the fyne.Window interface.
 func newWindow(a fyne.App, l *launcher.Launcher, initErr error) fyne.Window {
 	w := a.NewWindow("GLINT Moderator Launcher")
 	address, port := widget.NewEntry(), widget.NewEntry()
@@ -33,6 +39,7 @@ func newWindow(a fyne.App, l *launcher.Launcher, initErr error) fyne.Window {
 		if busy || initErr != nil {
 			connect.Disable()
 			restore.Disable()
+
 			return
 		}
 		connect.Enable()
@@ -46,14 +53,15 @@ func newWindow(a fyne.App, l *launcher.Launcher, initErr error) fyne.Window {
 			restore.Disable()
 		}
 	}
-	var run func(bool, *launcher.Confirmation)
-	run = func(rollback bool, approval *launcher.Confirmation) {
+	var run func(bool, *launcher.ConfirmationError)
+	run = func(rollback bool, approval *launcher.ConfirmationError) {
 		if busy {
 			return
 		}
 		if !rollback {
 			if err := launcher.Validate(address.Text, port.Text); err != nil {
 				dialog.ShowError(err, w)
+
 				return
 			}
 		}
@@ -64,26 +72,18 @@ func newWindow(a fyne.App, l *launcher.Launcher, initErr error) fyne.Window {
 		host, service := address.Text, port.Text
 		go func() {
 			update := func(s string) { fyne.Do(func() { status.SetText(s) }) }
-			var err error
-			if rollback {
-				err = l.Restore(approval, update)
-			} else {
-				err = l.Connect(host, service, approval, update)
-			}
+			err := performOperation(l, rollback, approval, host, service, update)
 			fyne.Do(func() {
 				busy = false
 				address.Enable()
 				port.Enable()
 				refresh()
-				var confirmation *launcher.Confirmation
-				if errors.As(err, &confirmation) {
+				var confirmation *launcher.ConfirmationError
+				switch {
+				case errors.As(err, &confirmation):
 					busy = true
 					refresh()
-					message := "Backup уже существует, а текущие настройки отличаются от режима модератора. Применить режим модератора и указанные адрес и порт ВМ?"
-					if rollback {
-						message = "Текущие настройки отличаются от режима модератора. Откат заменит весь INI содержимым backup, включая последующие изменения. Продолжить?"
-					}
-					d := dialog.NewConfirm("Подтверждение", message, func(ok bool) {
+					showConfirmation(w, rollback, func(ok bool) {
 						busy = false
 						refresh()
 						if ok {
@@ -91,16 +91,13 @@ func newWindow(a fyne.App, l *launcher.Launcher, initErr error) fyne.Window {
 						} else {
 							status.SetText("Операция отменена")
 						}
-					}, w)
-					d.SetConfirmText("Продолжить")
-					d.SetDismissText("Отмена")
-					d.Show()
-				} else if err != nil {
+					})
+				case err != nil:
 					status.SetText("Ошибка")
 					dialog.ShowError(err, w)
-				} else if rollback {
+				case rollback:
 					status.SetText("Исходные настройки восстановлены")
-				} else {
+				default:
 					status.SetText("Space Client запущен. Адрес и порт ВМ сохранены. Введите логин и пароль в его интерфейсе вручную")
 				}
 			})
@@ -117,11 +114,42 @@ func newWindow(a fyne.App, l *launcher.Launcher, initErr error) fyne.Window {
 	})
 	w.SetContent(container.NewVBox(widget.NewForm(
 		widget.NewFormItem("Адрес удалённой машины", address),
-		widget.NewFormItem("Порт", port)), connect, restore, status))
-	w.Resize(fyne.NewSize(620, 310))
+		widget.NewFormItem("Порт", port),
+	), connect, restore, status))
+	w.Resize(fyne.NewSize(windowWidth, windowHeight))
 	refresh()
 	if initErr != nil {
 		dialog.ShowError(initErr, w)
 	}
+
 	return w
+}
+
+func showConfirmation(w fyne.Window, rollback bool, done func(bool)) {
+	message := "Backup уже существует, а текущие настройки отличаются от режима модератора. " +
+		"Применить режим модератора и указанные адрес и порт ВМ?"
+	if rollback {
+		message = "Текущие настройки отличаются от режима модератора. " +
+			"Откат заменит весь INI содержимым backup, включая последующие изменения. Продолжить?"
+	}
+	d := dialog.NewConfirm("Подтверждение", message, done, w)
+	d.SetConfirmText("Продолжить")
+	d.SetDismissText("Отмена")
+	d.Show()
+}
+
+func performOperation(l *launcher.Launcher, rollback bool, approval *launcher.ConfirmationError,
+	host, service string, update func(string),
+) error {
+	var err error
+	if rollback {
+		err = l.Restore(approval, update)
+	} else {
+		err = l.Connect(host, service, approval, update)
+	}
+	if err != nil {
+		return fmt.Errorf("операция с настройками: %w", err)
+	}
+
+	return nil
 }

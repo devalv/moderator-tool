@@ -13,16 +13,19 @@ import (
 	"sync"
 )
 
-const BackupSuffix = ".moderator-backup"
-const RunningMessage = "Space Client уже запущен. Закройте его самостоятельно и повторите операцию"
+const (
+	privateFileMode = 0o600
+	BackupSuffix    = ".moderator-backup"
+	RunningMessage  = "клиент Space Client уже запущен. Закройте его самостоятельно и повторите операцию"
+)
 
-// Confirmation binds approval to the exact files and requested configuration.
-type Confirmation struct {
+// ConfirmationError binds approval to the exact files and requested configuration.
+type ConfirmationError struct {
 	current, backup, prepared []byte
 	restore                   bool
 }
 
-func (*Confirmation) Error() string {
+func (*ConfirmationError) Error() string {
 	return "Текущие настройки отличаются от режима модератора. Продолжить?"
 }
 
@@ -44,11 +47,13 @@ func New() (*Launcher, error) {
 		cmd := exec.Command(exe)
 		cmd.Dir = filepath.Dir(exe)
 		if err := cmd.Start(); err != nil {
-			return err
+			return fmt.Errorf("не удалось запустить процесс: %w", err)
 		}
 		go func() { _ = cmd.Wait() }()
+
 		return nil
 	}
+
 	return l, nil
 }
 
@@ -57,41 +62,46 @@ func Validate(address, port string) error {
 	if net.ParseIP(address) == nil {
 		host := strings.TrimSuffix(address, ".")
 		if len(host) == 0 || len(host) > 253 {
-			return fmt.Errorf("Укажите корректный IP-адрес или hostname")
+			return errors.New("укажите корректный IP-адрес или hostname")
 		}
 		for _, label := range strings.Split(host, ".") {
 			if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-				return fmt.Errorf("Некорректный hostname")
+				return errors.New("некорректный hostname")
 			}
 			for _, c := range label {
 				if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
-					return fmt.Errorf("Некорректный hostname")
+					return errors.New("некорректный hostname")
 				}
 			}
 		}
 	}
 	for _, c := range port {
 		if c < '0' || c > '9' {
-			return fmt.Errorf("Порт: целое число от 1 до 65535")
+			return errors.New("порт: целое число от 1 до 65535")
 		}
 	}
 	n, err := strconv.Atoi(port)
 	if err != nil || n < 1 || n > 65535 {
-		return fmt.Errorf("Порт: целое число от 1 до 65535")
+		return errors.New("порт: целое число от 1 до 65535")
 	}
+
 	return nil
 }
 
 func readRegular(path string) ([]byte, os.FileMode, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("не удалось прочитать файл %s: %w", path, err)
 	}
 	if !info.Mode().IsRegular() {
-		return nil, 0, fmt.Errorf("Ожидался обычный файл: %s", path)
+		return nil, 0, fmt.Errorf("ожидался обычный файл: %s", path)
 	}
 	data, err := os.ReadFile(path)
-	return data, info.Mode().Perm(), err
+	if err != nil {
+		return nil, 0, fmt.Errorf("не удалось прочитать файл %s: %w", path, err)
+	}
+
+	return data, info.Mode().Perm(), nil
 }
 
 func (l *Launcher) BackupExists() (bool, error) {
@@ -100,27 +110,32 @@ func (l *Launcher) BackupExists() (bool, error) {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("не удалось проверить backup: %w", err)
 	}
 	if !info.Mode().IsRegular() {
-		return false, fmt.Errorf("Backup не является обычным файлом")
+		return false, errors.New("backup не является обычным файлом")
 	}
+
 	return true, nil
 }
 
-func (l *Launcher) Connect(address, port string, approval *Confirmation, status func(string)) error {
+func (l *Launcher) Connect(address, port string, approval *ConfirmationError, status func(string)) error {
 	if err := Validate(address, port); err != nil {
 		return err
 	}
+
 	return l.operate(false, strings.TrimSpace(address), port, approval, status)
 }
-func (l *Launcher) Restore(approval *Confirmation, status func(string)) error {
+
+func (l *Launcher) Restore(approval *ConfirmationError, status func(string)) error {
 	return l.operate(true, "", "", approval, status)
 }
 
-func (l *Launcher) operate(restore bool, address, port string, approval *Confirmation, status func(string)) (err error) {
+func (l *Launcher) operate(restore bool, address, port string,
+	approval *ConfirmationError, status func(string),
+) (err error) {
 	if !l.mu.TryLock() {
-		return fmt.Errorf("Операция уже выполняется")
+		return errors.New("операция уже выполняется")
 	}
 	defer l.mu.Unlock()
 	status("Проверка…")
@@ -146,56 +161,19 @@ func (l *Launcher) operate(restore bool, address, port string, approval *Confirm
 	}
 	exists := backupErr == nil
 	if restore && !exists {
-		return fmt.Errorf("Резервная копия отсутствует")
+		return errors.New("резервная копия отсутствует")
 	}
-	if exists && !ready && (approval == nil || approval.restore != restore || !bytes.Equal(approval.prepared, prepared) || !bytes.Equal(approval.current, current) || !bytes.Equal(approval.backup, backup)) {
-		return &Confirmation{current: current, backup: backup, prepared: prepared, restore: restore}
+	if exists && !ready && !approval.matches(restore, current, backup, prepared) {
+		return &ConfirmationError{current: current, backup: backup, prepared: prepared, restore: restore}
 	}
-	unchanged := func() error {
-		if err := l.Check(); err != nil {
-			return err
-		}
-		b, _, err := readRegular(l.INI)
-		if err != nil {
-			return err
-		}
-		if !bytes.Equal(b, current) {
-			return fmt.Errorf("INI изменился во время операции. Повторите действие")
-		}
-		if exists {
-			b, _, err = readRegular(l.INI + BackupSuffix)
-			if err != nil {
-				return err
-			}
-			if !bytes.Equal(b, backup) {
-				return fmt.Errorf("Backup изменился во время операции")
-			}
-		}
-		return nil
-	}
+	unchanged := func() error { return l.checkUnchanged(current, backup, exists) }
 	if err = unchanged(); err != nil {
 		return err
 	}
 	if restore {
 		status("Восстановление…")
-		if err = writeFile(l.INI, backup, backupMode, false, unchanged); err != nil {
-			return err
-		}
-		b, _, e := readRegular(l.INI)
-		if e != nil {
-			return e
-		}
-		if !bytes.Equal(b, backup) {
-			return fmt.Errorf("Проверка восстановления не пройдена; backup сохранён")
-		}
-		b, _, e = readRegular(l.INI + BackupSuffix)
-		if e != nil {
-			return e
-		}
-		if !bytes.Equal(b, backup) {
-			return fmt.Errorf("Backup изменился; копия сохранена")
-		}
-		return os.Remove(l.INI + BackupSuffix)
+
+		return l.restoreBackup(backup, backupMode, unchanged)
 	}
 	status("Подготовка конфигурации…")
 	if !exists {
@@ -217,15 +195,16 @@ func (l *Launcher) operate(restore bool, address, port string, approval *Confirm
 	}
 	status("Запуск Space Client…")
 	if err = l.Start(); err != nil {
-		return fmt.Errorf("Не удалось запустить Space Client; backup сохранён: %w", err)
+		return fmt.Errorf("не удалось запустить Space Client; backup сохранён: %w", err)
 	}
+
 	return nil
 }
 
 func writeFile(path string, data []byte, mode os.FileMode, backup bool, before func() error) (err error) {
 	f, err := os.CreateTemp(filepath.Dir(path), ".moderator-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("не удалось создать временный файл: %w", err)
 	}
 	defer func() {
 		if e := os.Remove(f.Name()); e != nil && !errors.Is(e, os.ErrNotExist) {
@@ -254,5 +233,60 @@ func writeFile(path string, data []byte, mode os.FileMode, backup bool, before f
 	if err != nil {
 		return err
 	}
+
 	return syncDir(filepath.Dir(path))
+}
+
+func (c *ConfirmationError) matches(restore bool, current, backup, prepared []byte) bool {
+	return c != nil && c.restore == restore && bytes.Equal(c.current, current) &&
+		bytes.Equal(c.backup, backup) && bytes.Equal(c.prepared, prepared)
+}
+
+func (l *Launcher) checkUnchanged(current, backup []byte, exists bool) error {
+	if err := l.Check(); err != nil {
+		return err
+	}
+	b, _, err := readRegular(l.INI)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(b, current) {
+		return errors.New("INI изменился во время операции. Повторите действие")
+	}
+	if exists {
+		b, _, err = readRegular(l.INI + BackupSuffix)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(b, backup) {
+			return errors.New("backup изменился во время операции")
+		}
+	}
+
+	return nil
+}
+
+func (l *Launcher) restoreBackup(backup []byte, mode os.FileMode, before func() error) error {
+	if err := writeFile(l.INI, backup, mode, false, before); err != nil {
+		return err
+	}
+	b, _, e := readRegular(l.INI)
+	if e != nil {
+		return e
+	}
+	if !bytes.Equal(b, backup) {
+		return errors.New("проверка восстановления не пройдена; backup сохранён")
+	}
+	b, _, e = readRegular(l.INI + BackupSuffix)
+	if e != nil {
+		return e
+	}
+	if !bytes.Equal(b, backup) {
+		return errors.New("backup изменился; копия сохранена")
+	}
+	if err := os.Remove(l.INI + BackupSuffix); err != nil {
+		return fmt.Errorf("не удалось удалить backup: %w", err)
+	}
+
+	return nil
 }

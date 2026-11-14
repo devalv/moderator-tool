@@ -1,5 +1,6 @@
 .PHONY: build-linux-astra build-linux-redos build-win-11 fmt build-deb test
 
+HOST_GOOS := $(shell go env GOOS)
 
 fmt:
 	go mod tidy

@@ -33,12 +33,12 @@ func fixture(t *testing.T) (*Launcher, *int) {
 	return &Launcher{INI: path, Check: func() error { return nil }, Start: func() error { *starts++; return nil }}, starts
 }
 func quiet(string) {}
-func connect(l *Launcher, c *Confirmation) error {
+func connect(l *Launcher, c *ConfirmationError) error {
 	return l.Connect("host.example", "443", c, quiet)
 }
-func approve(t *testing.T, err error) *Confirmation {
+func approve(t *testing.T, err error) *ConfirmationError {
 	t.Helper()
-	var c *Confirmation
+	var c *ConfirmationError
 	if !errors.As(err, &c) {
 		t.Fatalf("expected confirmation, got %v", err)
 	}

@@ -17,6 +17,11 @@ linters:
     - forbidigo
 
 linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/devalv/moderator-tool)
   funlen:
     lines: 150
     statements: 75

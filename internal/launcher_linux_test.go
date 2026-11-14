@@ -130,9 +130,9 @@ func TestLinuxUserProcesses(t *testing.T) {
 		{"UID before name", "Uid: 2000 1000 2000 2000\nName: space_client\n", RunningMessage},
 		{"missing UID", "Name: space_client\n", "отсутствует поле"},
 		{"missing name", "Uid: 1000 1000 1000 1000\n", "отсутствует поле"},
-		{"malformed UID", "Name: space_client\nUid: 1000 invalid 1000 1000\n", "Некорректный UID"},
-		{"incomplete UID", "Name: space_client\nUid: 1000\n", "Некорректное поле Uid"},
-		{"unreadable status", "unreadable", "Невозможно проверить процесс"},
+		{"malformed UID", "Name: space_client\nUid: 1000 invalid 1000 1000\n", "некорректный UID"},
+		{"incomplete UID", "Name: space_client\nUid: 1000\n", "некорректное поле Uid"},
+		{"unreadable status", "unreadable", "невозможно проверить процесс"},
 		{"vanished process", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
