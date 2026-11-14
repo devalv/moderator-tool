@@ -1,0 +1,43 @@
+# https://github.com/golangci/golangci-lint/blob/v1.62.2/.golangci.reference.yml
+
+linters:
+  enable-all: true
+  disable:
+    - exportloopref
+    - wsl
+    - depguard
+    - err113
+    - nonamedreturns
+    - revive
+    - varnamelen
+    - exhaustruct
+    - tagliatelle
+    - godox
+    - gomodguard
+    - forbidigo
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/devalv/moderator-tool)
+  funlen:
+    lines: 150
+    statements: 75
+  cyclop:
+    max-complexity: 25
+  gofmt:
+    simplify: true
+  gofumpt:
+    extra-rules: true
+  goimports:
+    local-prefixes: github.com/devalv/moderator-tool
+
+issues:
+  exclude-files:
+    - ".*\\.pb\\.go"  # Exclude protobuf generated files
+
+run:
+  timeout: 5m
+  tests: false

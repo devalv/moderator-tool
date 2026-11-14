@@ -1,0 +1,46 @@
+name: golangci-lint
+
+on:
+  pull_request:
+    paths:
+      - 'internal/**'
+      - 'cmd/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
+      - '.github/workflows/golangci-lint.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 #v7.0.0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install Fyne dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc libc6-dev pkg-config libgl1-mesa-dev xorg-dev \
+            libwayland-dev libxkbcommon-dev wayland-protocols
+
+      - name: Install golangci-lint (built with current Go)
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Check build
+        run: go build ./cmd/... ./internal/...
+
+      - name: golangci-lint
+        run: golangci-lint run ./cmd/... ./internal/...
