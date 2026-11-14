@@ -10,8 +10,11 @@ ifneq ($(filter linux windows,$(HOST_GOOS)),)
 endif
 
 test:
-	go clean -testcache
-	go test ./... -race -timeout=5m -v -count=10
+	docker run --rm --platform "linux/$$(docker version --format '{{.Server.Arch}}')" \
+		--user "$$(id -u):$$(id -g)" \
+		-e CGO_ENABLED=1 -e GOPATH=/tmp/go -e GOCACHE=/tmp/go-build \
+		-v "$(CURDIR):/src:ro" -w /src golang:1.26-bookworm \
+		go test -mod=readonly -tags ci ./... -race -timeout=5m -v -count=10
 
 
 build-linux-astra:

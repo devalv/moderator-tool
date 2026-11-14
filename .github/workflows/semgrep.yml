@@ -9,6 +9,7 @@ on:
       - 'go.sum'
       - '.golangci.yml'
       - 'devops/**'
+      - '.github/workflows/semgrep.yml'
 
 permissions:
   contents: read

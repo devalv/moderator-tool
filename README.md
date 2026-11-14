@@ -28,6 +28,18 @@ Backup `client_settings.ini.moderator-backup` находится рядом с I
 - Linux INI: `$HOME/.config/SpaceClient/client_settings.ini`.
 - Linux запуск: `/opt/thin-client/start_vdi_client.sh`, без аргументов.
 
+## Тесты
+
+```sh
+make test
+```
+
+Тесты выполняются в Linux-контейнере Go 1.26 на архитектуре Docker VM,
+в том числе на Mac с Apple Silicon. Тег Fyne `ci` позволяет запускать GUI-тесты
+без экрана. Включён детектор гонок (`-race`), каждый тест повторяется 10 раз.
+Исходники подключаются только для чтения; Go-кеш остаётся внутри временного контейнера.
+Нужны Docker, GNU Make и доступ к Docker Hub и серверам Go-модулей.
+
 ## Сборка
 
 Для сборки Linux amd64 в контейнере нужен Docker и GNU Make:

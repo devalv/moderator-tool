@@ -9,6 +9,7 @@ on:
       - 'go.sum'
       - '.golangci.yml'
       - 'devops/**'
+      - '.github/workflows/trivy.yml'
 
 permissions:
   contents: read
