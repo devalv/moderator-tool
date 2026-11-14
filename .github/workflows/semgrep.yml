@@ -3,7 +3,12 @@ name: semgrep Security Scan
 on:
   pull_request:
     paths:
-      - "main.go"
+      - 'cmd/**'
+      - 'internal/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
+      - 'devops/**'
 
 permissions:
   contents: read
