@@ -2,7 +2,7 @@ FROM golang:1.26-bookworm
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc-mingw-w64-x86-64=16.2.0-1+29 \
+    gcc-mingw-w64-x86-64=12.2.0-14+25.2 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc \
