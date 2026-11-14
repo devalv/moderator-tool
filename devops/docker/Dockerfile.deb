@@ -1,0 +1,10 @@
+FROM moderator-builder:linux AS builder
+
+ARG PACKAGE_VERSION
+ARG PACKAGE_ARCH=amd64
+
+WORKDIR /src
+COPY dist/Moderator-Launcher dist/Moderator-Launcher
+COPY devops/package-deb.sh devops/package-deb.sh
+RUN test "$PACKAGE_ARCH" = amd64 \
+    && PACKAGE_VERSION="$PACKAGE_VERSION" sh devops/package-deb.sh

@@ -38,7 +38,7 @@ make build-linux-astra
 
 Команда использует базовый образ
 `registry.astralinux.ru/library/astra/ubi18-golang121:1.8.5-mg16.2.0`,
-устанавливает build-зависимости Fyne и создаёт `dist/GLINT-Moderator-Launcher`.
+устанавливает build-зависимости Fyne и создаёт `dist/Moderator-Launcher`.
 Артефакт принадлежит пользователю, запустившему Make. Нужен доступ к registry,
 APT-репозиториям и серверам загрузки Go toolchain/модулей: проект требует Go >= 1.22,
 поэтому для Go 1.21 включён `GOTOOLCHAIN=auto`. При повторном запуске Docker
@@ -54,7 +54,7 @@ make build-linux-redos
 
 Используются `Dockerfile.redos` и образ `registry.red-soft.ru/ubi8/golang:1.26`.
 Зависимости Fyne устанавливаются через `dnf`; артефакт —
-`dist/redos/GLINT-Moderator-Launcher`, отдельно от сборки Astra Linux.
+`dist/redos/Moderator-Launcher`, отдельно от сборки Astra Linux.
 Docker должен доверять TLS-сертификату registry; необходимые сертификаты
 настраиваются на хосте администратором. Проверка TLS в команде сборки не отключается.
 Состав графических dev-пакетов основан на [инструкции Fyne для dnf](https://docs.fyne.io/started/quick/);
@@ -70,9 +70,19 @@ make build-win-11
 
 `Dockerfile.windows` использует `golang:1.26-bookworm` и MinGW-w64 GCC.
 CGO включён, целевая платформа — Windows amd64; флаг `-H=windowsgui`
-убирает консольное окно. Артефакт: `dist/win-11/GLINT-Moderator-Launcher.exe`.
+убирает консольное окно. Артефакт: `dist/win-11/Moderator-Launcher.exe`.
 Нужны Docker в режиме Linux-контейнеров, GNU Make, POSIX-shell и доступ к Docker Hub,
 APT и серверам Go-модулей. Кросс-компиляция Fyne описана в
 [официальной документации](https://docs.fyne.io/started/cross-compiling/).
 Цель собирает EXE; выполнение Windows-тестов и ручная проверка GUI,
 Space Client и восстановления выполняются отдельно на Windows 11.
+
+Для сборки `.deb` для Astra Linux 1.8 amd64:
+
+```sh
+make build-deb VERSION=1.2.3
+```
+
+Цель сначала выполняет `build-linux-astra`, затем создаёт
+`dist/moderator-launcher_1.2.3_amd64.deb`. Пакет устанавливает
+`/usr/bin/moderator-launcher` и ярлык в меню приложений.
